@@ -105,7 +105,7 @@ notation (with lowercase 'e') for very large or very small values."
                 :message (format nil "Cannot encode non-finite float ~S as JSON" value)))
        (%write-float d stream)))
 
-    ((ratiop value)
+    ((typep value 'ratio)
      (%encode (float value 1.0d0) stream :pretty pretty :depth depth :indent indent))
 
     ((symbolp value)
