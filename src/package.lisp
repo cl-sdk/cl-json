@@ -4,6 +4,17 @@
   (:export
    ;; Reader
    #:parse
+   ;; SAX-style reader protocol
+   #:parse-sax
+   #:json-sax-handler
+   #:json-tree-handler
+   #:sax-value
+   #:sax-begin-object
+   #:sax-object-key
+   #:sax-end-object
+   #:sax-begin-array
+   #:sax-end-array
+   #:sax-result
    ;; Writer
    #:stringify
    ;; Conditions

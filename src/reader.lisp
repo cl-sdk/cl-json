@@ -1,6 +1,6 @@
 (in-package #:cl-json)
 
-;;; JSON → Lisp type mapping
+;;; JSON → Lisp type mapping (for the default tree-building handler)
 ;;;
 ;;;   null    → :null
 ;;;   true    → t
@@ -10,20 +10,123 @@
 ;;;   array   → list
 ;;;   object  → hash-table (test: equal, keys: strings)
 
-(defun parse (string)
-  "Parse a JSON string and return the corresponding Lisp value.
+;;; ─── SAX-style handler protocol ─────────────────────────────────────────────
+;;;
+;;; Subclass JSON-SAX-HANDLER and specialise the SAX-* generics to react to
+;;; parse events without building an intermediate Lisp tree.
+;;;
+;;; Event ordering for an object {"a":1}:
+;;;   sax-begin-object
+;;;   sax-object-key  "a"
+;;;   sax-value       1
+;;;   sax-end-object
+;;;
+;;; Event ordering for an array [1,2]:
+;;;   sax-begin-array
+;;;   sax-value  1
+;;;   sax-value  2
+;;;   sax-end-array
 
-Type mapping:
-  JSON null   → :null
-  JSON true   → t
-  JSON false  → nil
-  JSON string → string
-  JSON number → integer or double-float
-  JSON array  → list  (note: the empty array '[]' parses to NIL, which is
-                        indistinguishable from JSON false on the write side;
-                        use a vector #() when a round-trippable empty array
-                        is required)
-  JSON object → hash-table with string keys (test: equal)"
+(defclass json-sax-handler ()
+  ()
+  (:documentation
+   "Base class for SAX-style JSON event handlers.
+Subclass this and specialise the SAX-* generics to react to parse events."))
+
+(defgeneric sax-value (handler value)
+  (:documentation
+   "Called with a primitive JSON value.
+VALUE is one of: :null, t (true), nil (false), a string, an integer,
+or a double-float."))
+
+(defgeneric sax-begin-object (handler)
+  (:documentation "Called when a JSON object '{' is opened."))
+
+(defgeneric sax-object-key (handler key)
+  (:documentation "Called with the string KEY of the next object field."))
+
+(defgeneric sax-end-object (handler)
+  (:documentation "Called when a JSON object '}' is closed."))
+
+(defgeneric sax-begin-array (handler)
+  (:documentation "Called when a JSON array '[' is opened."))
+
+(defgeneric sax-end-array (handler)
+  (:documentation "Called when a JSON array ']' is closed."))
+
+(defgeneric sax-result (handler)
+  (:documentation
+   "Return the result value after PARSE-SAX has finished."))
+
+;;; Default no-op methods — subclasses need only specialise what they care about.
+(defmethod sax-value      ((h json-sax-handler) v) (declare (ignore v)))
+(defmethod sax-begin-object ((h json-sax-handler)))
+(defmethod sax-object-key   ((h json-sax-handler) k) (declare (ignore k)))
+(defmethod sax-end-object   ((h json-sax-handler)))
+(defmethod sax-begin-array  ((h json-sax-handler)))
+(defmethod sax-end-array    ((h json-sax-handler)))
+(defmethod sax-result       ((h json-sax-handler)) nil)
+
+;;; ─── Tree-building handler ───────────────────────────────────────────────────
+;;;
+;;; Reconstructs the standard Lisp tree from SAX events:
+;;;   object  → hash-table (string keys, EQUAL test)
+;;;   array   → list
+;;;   null    → :null, true → t, false → nil
+;;;   string/number → as-is
+;;;
+;;; The handler keeps a stack of accumulator frames:
+;;;   (:root   value)           — top-level result slot
+;;;   (:array  reversed-items)  — array under construction
+;;;   (:object hash-table key)  — object under construction; KEY is the
+;;;                               pending key string (nil between entries)
+
+(defclass json-tree-handler (json-sax-handler)
+  ((stack :initform (list (list :root nil)) :accessor %handler-stack))
+  (:documentation
+   "A SAX handler that builds the standard Lisp representation of JSON."))
+
+(defun %tree-accept (h v)
+  "Insert value V into the innermost accumulator frame of handler H."
+  (let ((frame (first (%handler-stack h))))
+    (ecase (first frame)
+      (:root
+       (setf (second frame) v))
+      (:array
+       (push v (second frame)))
+      (:object
+       (setf (gethash (third frame) (second frame)) v)
+       (setf (third frame) nil)))))
+
+(defmethod sax-value ((h json-tree-handler) v)
+  (%tree-accept h v))
+
+(defmethod sax-begin-object ((h json-tree-handler))
+  (push (list :object (make-hash-table :test 'equal) nil)
+        (%handler-stack h)))
+
+(defmethod sax-object-key ((h json-tree-handler) k)
+  (setf (third (first (%handler-stack h))) k))
+
+(defmethod sax-end-object ((h json-tree-handler))
+  (let ((ht (second (pop (%handler-stack h)))))
+    (%tree-accept h ht)))
+
+(defmethod sax-begin-array ((h json-tree-handler))
+  (push (list :array nil) (%handler-stack h)))
+
+(defmethod sax-end-array ((h json-tree-handler))
+  (let ((items (nreverse (second (pop (%handler-stack h))))))
+    (%tree-accept h items)))
+
+(defmethod sax-result ((h json-tree-handler))
+  (second (first (%handler-stack h))))
+
+;;; ─── Core SAX parser ─────────────────────────────────────────────────────────
+
+(defun parse-sax (string handler)
+  "Parse STRING as JSON, firing SAX events on HANDLER.
+Returns (SAX-RESULT HANDLER) after the parse completes."
   (let ((pos 0)
         (len (length string)))
     (labels
@@ -56,7 +159,7 @@ Type mapping:
            (let ((c (peek)))
              (cond
                ((null c)        (%error "Unexpected end of input"))
-               ((char= c #\")  (parse-string))
+               ((char= c #\")  (parse-string-value))
                ((char= c #\{)  (parse-object))
                ((char= c #\[)  (parse-array))
                ((char= c #\t)  (parse-true))
@@ -65,7 +168,9 @@ Type mapping:
                ((or (char= c #\-) (digit-char-p c)) (parse-number))
                (t (%error (format nil "Unexpected character '~C'" c))))))
 
-         (parse-string ()
+         ;; Parse a JSON string token and return the Lisp string.
+         ;; Used for both string values and object keys.
+         (parse-raw-string ()
            (expect #\")
            (let ((buf (make-array 64 :element-type 'character
                                       :adjustable t :fill-pointer 0)))
@@ -84,6 +189,9 @@ Type mapping:
                     (%error (format nil "Unescaped control character in string")))
                    (t
                     (vector-push-extend c buf)))))))
+
+         (parse-string-value ()
+           (sax-value handler (parse-raw-string)))
 
          (parse-escape ()
            (let ((c (advance)))
@@ -137,54 +245,54 @@ Type mapping:
 
          (parse-object ()
            (expect #\{)
+           (sax-begin-object handler)
            (skip-whitespace)
-           (let ((table (make-hash-table :test 'equal)))
-             (cond
-               ((and (peek) (char= (peek) #\}))
-                (advance)
-                table)
-               (t
-                (loop
-                  (skip-whitespace)
-                  (unless (and (peek) (char= (peek) #\"))
-                    (%error "Expected string key in object"))
-                  (let ((key (parse-string)))
-                    (skip-whitespace)
-                    (expect #\:)
-                    (setf (gethash key table) (parse-value)))
-                  (skip-whitespace)
-                  (let ((next (peek)))
-                    (cond
-                      ((null next)          (%error "Unterminated object"))
-                      ((char= next #\})     (advance) (return table))
-                      ((char= next #\,)     (advance))
-                      (t (%error (format nil "Expected ',' or '}' in object, got '~C'" next))))))))))
+           (cond
+             ((and (peek) (char= (peek) #\}))
+              (advance)
+              (sax-end-object handler))
+             (t
+              (loop
+                (skip-whitespace)
+                (unless (and (peek) (char= (peek) #\"))
+                  (%error "Expected string key in object"))
+                (sax-object-key handler (parse-raw-string))
+                (skip-whitespace)
+                (expect #\:)
+                (parse-value)
+                (skip-whitespace)
+                (let ((next (peek)))
+                  (cond
+                    ((null next)      (%error "Unterminated object"))
+                    ((char= next #\}) (advance) (sax-end-object handler) (return))
+                    ((char= next #\,) (advance))
+                    (t (%error (format nil "Expected ',' or '}' in object, got '~C'" next)))))))))
 
          (parse-array ()
            (expect #\[)
+           (sax-begin-array handler)
            (skip-whitespace)
            (cond
              ((and (peek) (char= (peek) #\]))
               (advance)
-              nil)
+              (sax-end-array handler))
              (t
-              (let ((items nil))
-                (loop
-                  (push (parse-value) items)
-                  (skip-whitespace)
-                  (let ((next (peek)))
-                    (cond
-                      ((null next)          (%error "Unterminated array"))
-                      ((char= next #\])     (advance) (return (nreverse items)))
-                      ((char= next #\,)     (advance))
-                      (t (%error (format nil "Expected ',' or ']' in array, got '~C'" next))))))))))
+              (loop
+                (parse-value)
+                (skip-whitespace)
+                (let ((next (peek)))
+                  (cond
+                    ((null next)      (%error "Unterminated array"))
+                    ((char= next #\]) (advance) (sax-end-array handler) (return))
+                    ((char= next #\,) (advance))
+                    (t (%error (format nil "Expected ',' or ']' in array, got '~C'" next)))))))))
 
          (parse-literal (chars value)
            (dolist (c chars)
              (let ((got (advance)))
                (unless (char= got c)
                  (%error (format nil "Invalid literal; expected '~C' got '~C'" c got)))))
-           value)
+           (sax-value handler value))
 
          (parse-true  () (parse-literal '(#\t #\r #\u #\e)        t))
          (parse-false () (parse-literal '(#\f #\a #\l #\s #\e)    nil))
@@ -219,14 +327,33 @@ Type mapping:
                  (unless (and (peek) (digit-char-p (peek)))
                    (%error "Expected digit in exponent"))
                  (loop while (and (peek) (digit-char-p (peek))) do (advance)))
-               (let ((num-str (subseq string start pos)))
-                 (if is-float
-                     (let ((*read-default-float-format* 'double-float))
-                       (read-from-string num-str))
-                     (parse-integer num-str)))))))
+               (sax-value handler
+                          (let ((num-str (subseq string start pos)))
+                            (if is-float
+                                (let ((*read-default-float-format* 'double-float))
+                                  (read-from-string num-str))
+                                (parse-integer num-str))))))))
 
-      (let ((result (parse-value)))
-        (skip-whitespace)
-        (when (< pos len)
-          (%error (format nil "Unexpected trailing content '~C'" (char string pos))))
-        result))))
+      (parse-value)
+      (skip-whitespace)
+      (when (< pos len)
+        (%error (format nil "Unexpected trailing content '~C'" (char string pos))))
+      (sax-result handler))))
+
+;;; ─── Public API ──────────────────────────────────────────────────────────────
+
+(defun parse (string)
+  "Parse a JSON string and return the corresponding Lisp value.
+
+Type mapping:
+  JSON null   → :null
+  JSON true   → t
+  JSON false  → nil
+  JSON string → string
+  JSON number → integer or double-float
+  JSON array  → list  (note: the empty array '[]' parses to NIL, which is
+                        indistinguishable from JSON false on the write side;
+                        use a vector #() when a round-trippable empty array
+                        is required)
+  JSON object → hash-table with string keys (test: equal)"
+  (parse-sax string (make-instance 'json-tree-handler)))
