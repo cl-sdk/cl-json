@@ -1,8 +1,8 @@
-(defpackage #:cl-json/tests
+(defpackage #:cl-json.tests
   (:use #:cl #:parachute)
   (:local-nicknames (#:json #:cl-json)))
 
-(in-package #:cl-json/tests)
+(in-package #:cl-json.tests)
 
 ;;; ── helpers ─────────────────────────────────────────────────────────────────
 
