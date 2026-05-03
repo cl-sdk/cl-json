@@ -10,28 +10,28 @@
 ;;;   array   → vector
 ;;;   object  → hash-table (test: equal, keys: strings)
 
-;;; ─── SAX-style handler protocol ─────────────────────────────────────────────
+;;; ─── Event handler protocol ──────────────────────────────────────────────────
 ;;;
-;;; Subclass JSON-SAX-HANDLER and specialise the SAX-* generics to react to
+;;; Subclass JSON-HANDLER and specialise the generics to react to
 ;;; parse events without building an intermediate Lisp tree.
 ;;;
 ;;; Event ordering for an object {"a":1}:
-;;;   sax-begin-object
-;;;   sax-object-key  "a"
-;;;   sax-value       1
-;;;   sax-end-object
+;;;   begin-object
+;;;   object-key  "a"
+;;;   on-value    1
+;;;   end-object
 ;;;
 ;;; Event ordering for an array [1,2]:
-;;;   sax-begin-array
-;;;   sax-value  1
-;;;   sax-value  2
-;;;   sax-end-array
+;;;   begin-array
+;;;   on-value  1
+;;;   on-value  2
+;;;   end-array
 
 (defclass json-sax-handler ()
   ()
   (:documentation
-   "Base class for SAX-style JSON event handlers.
-Subclass this and specialise the SAX-* generics to react to parse events."))
+   "Base class for JSON event handlers.
+Subclass this and specialise the generics to react to parse events."))
 
 (defgeneric sax-value (handler value)
   (:documentation
@@ -69,9 +69,9 @@ or a double-float."))
 
 ;;; ─── Tree-building handler ───────────────────────────────────────────────────
 ;;;
-;;; Reconstructs the standard Lisp tree from SAX events:
+;;; Reconstructs the standard Lisp tree from parse events:
 ;;;   object  → hash-table (string keys, EQUAL test)
-;;;   array   → list
+;;;   array   → vector
 ;;;   null    → :null, true → t, false → nil
 ;;;   string/number → as-is
 ;;;
@@ -84,7 +84,7 @@ or a double-float."))
 (defclass json-tree-handler (json-sax-handler)
   ((stack :initform (list (list :root nil)) :accessor %handler-stack))
   (:documentation
-   "A SAX handler that builds the standard Lisp representation of JSON."))
+   "A handler that builds the standard Lisp representation of JSON."))
 
 (defun %tree-accept (h v)
   "Insert value V into the innermost accumulator frame of handler H."
@@ -122,11 +122,11 @@ or a double-float."))
 (defmethod sax-result ((h json-tree-handler))
   (second (first (%handler-stack h))))
 
-;;; ─── Core SAX parser ─────────────────────────────────────────────────────────
+;;; ─── Core parser ─────────────────────────────────────────────────────────────
 
 (defun parse-sax (string handler)
-  "Parse STRING as JSON, firing SAX events on HANDLER.
-Returns (SAX-RESULT HANDLER) after the parse completes."
+  "Parse STRING as JSON, firing events on HANDLER.
+Returns the result of HANDLER after the parse completes."
   (let ((pos 0)
         (len (length string)))
     (labels
