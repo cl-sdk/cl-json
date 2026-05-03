@@ -108,13 +108,4 @@ Generated definitions:
            ,instance-var))
 
        (defmethod decode-json ((type (eql ',class-name)) ,ht-var)
-         (,from-json-fn ,ht-var))
-
-       ;; ── cl-sdk/meta-definitions integration ─────────────────────────────
-       ;; Register the derivation so the cl-sdk ecosystem can discover that
-       ;; CLASS-NAME derives :json.  The call is conditional so that loading
-       ;; cl-json standalone (without meta-definitions) still works.
-       (when (fboundp 'meta-definitions:register-derivation)
-         (meta-definitions:register-derivation ',class-name :json))
-
-       ',class-name)))
+         (,from-json-fn ,ht-var)))))

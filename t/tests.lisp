@@ -102,7 +102,7 @@
   (is string= "\"\""       (json:stringify ""))
   (is string= "\"hello\""  (json:stringify "hello"))
   (is string= "\"a\\\"b\"" (json:stringify "a\"b"))
-  (is string= "\"a\\nb\""  (json:stringify (format nil "a~nb"))))
+  (is string= "\"a\\nb\""  (json:stringify (format nil "a~%b"))))
 
 (define-test "stringify symbols"
   (is string= "\"foo\""  (json:stringify 'foo))
