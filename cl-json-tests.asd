@@ -1,6 +1,6 @@
 (defsystem #:cl-json.tests
   :description "Tests for cl-json."
-  :depends-on (#:cl-json "parachute")
+  :depends-on (#:cl-json #:parachute)
   :pathname "t"
   :serial t
   :components ((:file "tests"))
