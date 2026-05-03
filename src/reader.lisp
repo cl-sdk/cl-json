@@ -183,7 +183,7 @@ Returns (HANDLER-RESULT HANDLER) after the parse completes."
                    ((char= c #\\)
                     (vector-push-extend (parse-escape) buf))
                    ((char< c #\Space)
-                    (%error "Unescaped control character in string"))
+                    (%error (format nil "Unescaped control character in string: ~S" c)))
                    (t
                     (vector-push-extend c buf)))))))
 
