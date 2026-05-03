@@ -211,3 +211,7 @@ specialise the methods they care about.
   (json::%parse (json::%input->stream "{\"a\":1,\"b\":2}") h))
 ; => ("a" "b")
 ```
+
+## License
+
+Unlicense
