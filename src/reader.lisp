@@ -159,7 +159,7 @@ Returns (SAX-RESULT HANDLER) after the parse completes."
            (let ((c (peek)))
              (cond
                ((null c)        (%error "Unexpected end of input"))
-               ((char= c #\")  (parse-string-value))
+               ((char= c #\")  (sax-value handler (parse-raw-string)))
                ((char= c #\{)  (parse-object))
                ((char= c #\[)  (parse-array))
                ((char= c #\t)  (parse-true))
@@ -189,9 +189,6 @@ Returns (SAX-RESULT HANDLER) after the parse completes."
                     (%error (format nil "Unescaped control character in string")))
                    (t
                     (vector-push-extend c buf)))))))
-
-         (parse-string-value ()
-           (sax-value handler (parse-raw-string)))
 
          (parse-escape ()
            (let ((c (advance)))
