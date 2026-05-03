@@ -4,14 +4,16 @@
 ;;;
 ;;;   :null        → null
 ;;;   t            → true
-;;;   nil          → false
+;;;   nil          → false  (nil always encodes as false, never as an empty array;
+;;;                             the nil/list disambiguation is only available when
+;;;                             decoding with derive-json, which has slot-type context)
 ;;;   string       → string
 ;;;   integer      → integer number
 ;;;   float        → floating-point number
 ;;;   ratio        → floating-point number (coerced to double-float)
 ;;;   keyword      → string  (symbol-name, downcased)
 ;;;   symbol       → string  (symbol-name, downcased)
-;;;   list         → array
+;;;   list         → array   (non-nil list)
 ;;;   vector       → array
 ;;;   hash-table   → object  (keys converted via key→string)
 ;;;   CLOS object  → object  (via encode-json generic function)
@@ -191,14 +193,15 @@ Keyword arguments:
 Type mapping:
   :null        → null
   t            → true
-  nil          → false
+  nil          → false  (nil always encodes as false; use derive-json for
+                            list/false disambiguation when decoding)
   string       → JSON string
   integer      → integer number
   float        → floating-point number
   ratio        → floating-point number
   keyword      → JSON string (downcased symbol name)
   symbol       → JSON string (downcased symbol name)
-  list         → JSON array
+  list         → JSON array  (non-nil list)
   vector       → JSON array
   hash-table   → JSON object (keys sorted, converted to strings)
   CLOS object  → via ENCODE-JSON generic function"
