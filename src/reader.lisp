@@ -7,7 +7,7 @@
 ;;;   false   → nil
 ;;;   string  → string
 ;;;   number  → integer or double-float
-;;;   array   → list
+;;;   array   → vector
 ;;;   object  → hash-table (test: equal, keys: strings)
 
 ;;; ─── SAX-style handler protocol ─────────────────────────────────────────────
@@ -117,7 +117,7 @@ or a double-float."))
 
 (defmethod sax-end-array ((h json-tree-handler))
   (let ((items (nreverse (second (pop (%handler-stack h))))))
-    (%tree-accept h items)))
+    (%tree-accept h (coerce items 'vector))))
 
 (defmethod sax-result ((h json-tree-handler))
   (second (first (%handler-stack h))))
@@ -348,9 +348,6 @@ Type mapping:
   JSON false  → nil
   JSON string → string
   JSON number → integer or double-float
-  JSON array  → list  (note: the empty array '[]' parses to NIL, which is
-                        indistinguishable from JSON false on the write side;
-                        use a vector #() when a round-trippable empty array
-                        is required)
+  JSON array  → vector
   JSON object → hash-table with string keys (test: equal)"
   (parse-sax string (make-instance 'json-tree-handler)))

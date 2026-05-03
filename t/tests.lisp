@@ -57,21 +57,16 @@
   (is string= (string (code-char #x00e9)) (json:parse "\"\\u00E9\"")))
 
 (define-test "parse arrays"
-  ;; Note: an empty JSON array parses to NIL (the empty list), which is
-  ;; indistinguishable from JSON false.  Use a vector (#()) when a round-
-  ;; trippable empty array is needed on the write side.
-  (is equal  nil          (json:parse "[]"))
-  (is equal  '(1 2 3)     (json:parse "[1,2,3]"))
-  (is equal  '("a" t nil) (json:parse "[\"a\",true,false]"))
-  (is equal  '((1 2) (3)) (json:parse "[[1,2],[3]]")))
+  (is equalp #()              (json:parse "[]"))
+  (is equalp #(1 2 3)         (json:parse "[1,2,3]"))
+  (is equalp #("a" t nil)     (json:parse "[\"a\",true,false]"))
+  (is equalp #(#(1 2) #(3))   (json:parse "[[1,2],[3]]")))
 
-(define-test "empty array representation"
-  ;; [] parses to NIL, which stringifies to "false" — the nil/empty-list ambiguity.
-  ;; Use an empty vector #() to write a round-trippable empty JSON array.
-  (is string= "false" (json:stringify (json:parse "[]")))
-  (is string= "[]"    (json:stringify #()))
-  ;; A non-empty list round-trips correctly.
-  (is equal '(1 2) (json:parse (json:stringify '(1 2)))))
+(define-test "array roundtrip"
+  ;; Empty and non-empty arrays parse to vectors and round-trip correctly.
+  (is string= "[]"      (json:stringify (json:parse "[]")))
+  (is string= "[1,2,3]" (json:stringify (json:parse "[1,2,3]")))
+  (is equalp #(1 2) (json:parse (json:stringify #(1 2)))))
 
 (define-test "parse objects"
   (true (ht= (ht "a" 1) (json:parse "{\"a\":1}")))
@@ -80,7 +75,7 @@
 
 (define-test "parse whitespace"
   (is =  1 (json:parse "  1  "))
-  (is equal '(1 2)
+  (is equalp #(1 2)
      (json:parse (format nil "[ 1 ,~%  2 ]"))))
 
 (define-test "parse errors"
@@ -133,6 +128,6 @@
   ;; Values that survive a parse → stringify → parse cycle unchanged.
   (dolist (v '(:null t nil 0 "hello"))
     (is equalp v (json:parse (json:stringify v))))
-  ;; Array roundtrip
-  (is equal '(1 "two" nil t :null)
-      (json:parse (json:stringify '(1 "two" nil t :null)))))
+  ;; Array roundtrip (parse always produces vectors)
+  (is equalp #(1 "two" nil t :null)
+      (json:parse (json:stringify #(1 "two" nil t :null)))))
