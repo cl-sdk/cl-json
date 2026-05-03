@@ -176,12 +176,17 @@ notation (with lowercase 'e') for very large or very small values."
 
 ;; ── public API ───────────────────────────────────────────────────────────────
 
-(defun stringify (value &key (pretty nil) (indent "  "))
-  "Convert VALUE to a JSON string.
+(defun stringify (value &key (pretty nil) (indent "  ") (stream nil))
+  "Encode VALUE as JSON.
+
+If STREAM is provided, write JSON to STREAM and return nil.
+Otherwise, return a JSON string.
 
 Keyword arguments:
   PRETTY  — when non-nil, emit indented, human-readable JSON.
   INDENT  — the string used as one indentation level (default: two spaces).
+  STREAM  — when non-nil, write JSON to this character or binary stream.
+             Binary streams are wrapped with flexi-streams using UTF-8 encoding.
 
 Type mapping:
   :null        → null
@@ -197,8 +202,22 @@ Type mapping:
   vector       → JSON array
   hash-table   → JSON object (keys sorted, converted to strings)
   CLOS object  → via ENCODE-JSON generic function"
-  (with-output-to-string (stream)
-    (%encode value stream :pretty pretty :indent indent)))
+  (flet ((encode-to (out)
+           (%encode value out :pretty pretty :indent indent)))
+    (cond
+      ((null stream)
+       (with-output-to-string (out)
+         (encode-to out)))
+      ((and (streamp stream)
+            (subtypep (stream-element-type stream) 'character))
+       (encode-to stream))
+      ((streamp stream)
+       ;; Binary / octet stream: wrap with flexi-streams for UTF-8 encoding.
+       (let ((flexi (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
+         (encode-to flexi)))
+      (t
+       (error 'json-encode-error
+              :message (format nil "Cannot write to ~S: expected nil or stream" stream))))))
 
 ;; Default encode-json method signals a helpful error.
 (defmethod encode-json (value stream)

@@ -2,7 +2,7 @@
   :description "A JSON reader and writer for Common Lisp."
   :version "0.1.0"
   :license "Unlicense"
-  :depends-on (#:meta-definitions #:closer-mop)
+  :depends-on (#:meta-definitions #:closer-mop #:flexi-streams)
   :pathname "src"
   :serial t
   :components ((:file "package")

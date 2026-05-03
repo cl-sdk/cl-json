@@ -1,6 +1,7 @@
 (defpackage #:cl-json.tests
   (:use #:cl #:parachute)
-  (:local-nicknames (#:json #:cl-json)))
+  (:local-nicknames (#:json #:cl-json)
+                    (#:flexi #:flexi-streams)))
 
 (in-package #:cl-json.tests)
 
@@ -131,3 +132,27 @@
   ;; Array roundtrip (parse always produces vectors)
   (is equalp #(1 "two" nil t :null)
       (json:parse (json:stringify #(1 "two" nil t :null)))))
+
+;;; ── stream tests ─────────────────────────────────────────────────────────────
+
+(define-test "parse from character stream"
+  (let ((stream (make-string-input-stream "[1,2,3]")))
+    (is equalp #(1 2 3) (json:parse stream))))
+
+(define-test "parse from binary stream"
+  (let* ((bytes (flexi:string-to-octets "{\"a\":1}" :external-format :utf-8))
+         (stream (flexi:make-in-memory-input-stream bytes)))
+    (true (json:parse stream))))
+
+(define-test "stringify to character stream"
+  (let ((stream (make-string-output-stream)))
+    (json:stringify #(1 2 3) :stream stream)
+    (is string= "[1,2,3]" (get-output-stream-string stream))))
+
+(define-test "stringify to binary stream"
+  (let* ((out (flexi:make-in-memory-output-stream))
+         (_ (json:stringify "hello" :stream out))
+         (bytes (flexi:get-output-stream-sequence out))
+         (result (flexi:octets-to-string bytes :external-format :utf-8)))
+    (declare (ignore _))
+    (is string= "\"hello\"" result)))

@@ -121,26 +121,25 @@ or a double-float."))
 (defmethod handler-result ((h json-tree-handler))
   (second (first (%handler-stack h))))
 
-;;; ─── Core parser ─────────────────────────────────────────────────────────────
+;;; ─── Core parser ────────────────────────────────────────────────────────────────────────────
 
-(defun %parse (string handler)
-  "Internal: parse STRING as JSON, firing events on HANDLER.
+(defun %parse (stream handler)
+  "Internal: parse CHARACTER-STREAM as JSON, firing events on HANDLER.
 Returns (HANDLER-RESULT HANDLER) after the parse completes."
-  (let ((pos 0)
-        (len (length string)))
+  (let ((pos 0))
     (labels
         ((%error (msg)
            (error 'json-parse-error :message msg :position pos))
 
          (peek ()
-           (when (< pos len)
-             (char string pos)))
+           (peek-char nil stream nil nil))
 
          (advance ()
-           (when (>= pos len)
-             (%error "Unexpected end of input"))
-           (prog1 (char string pos)
-             (incf pos)))
+           (let ((c (read-char stream nil nil)))
+             (unless c
+               (%error "Unexpected end of input"))
+             (incf pos)
+             c))
 
          (expect (expected)
            (let ((c (advance)))
@@ -148,10 +147,10 @@ Returns (HANDLER-RESULT HANDLER) after the parse completes."
                (%error (format nil "Expected '~C' but got '~C'" expected c)))))
 
          (skip-whitespace ()
-           (loop while (and (< pos len)
-                            (member (char string pos)
-                                    '(#\Space #\Tab #\Newline #\Return)))
-                 do (incf pos)))
+           (loop for c = (peek-char nil stream nil nil)
+                 while (and c (member c '(#\Space #\Tab #\Newline #\Return)))
+                 do (read-char stream nil nil)
+                    (incf pos)))
 
          (parse-value ()
            (skip-whitespace)
@@ -172,20 +171,19 @@ Returns (HANDLER-RESULT HANDLER) after the parse completes."
          (parse-raw-string ()
            (expect #\")
            (let ((buf (make-array 64 :element-type 'character
-                                      :adjustable t :fill-pointer 0)))
+                                     :adjustable t :fill-pointer 0)))
              (loop
-               (when (>= pos len)
-                 (%error "Unterminated string"))
-               (let ((c (advance)))
+               (let ((c (read-char stream nil nil)))
+                 (unless c
+                   (%error "Unterminated string"))
+                 (incf pos)
                  (cond
                    ((char= c #\")
                     (return (coerce buf 'string)))
                    ((char= c #\\)
-                    (when (>= pos len)
-                      (%error "Unterminated escape sequence"))
                     (vector-push-extend (parse-escape) buf))
                    ((char< c #\Space)
-                    (%error (format nil "Unescaped control character in string")))
+                    (%error "Unescaped control character in string"))
                    (t
                     (vector-push-extend c buf)))))))
 
@@ -207,37 +205,32 @@ Returns (HANDLER-RESULT HANDLER) after the parse completes."
          (parse-unicode-escape ()
            (let ((code 0))
              (dotimes (i 4)
-               (when (>= pos len)
-                 (%error "Incomplete unicode escape"))
                (let* ((c     (advance))
                       (digit (digit-char-p c 16)))
                  (unless digit
                    (%error (format nil "Invalid hex digit '~C' in \\uXXXX escape" c)))
                  (setf code (+ (* code 16) digit))))
-             ;; Handle surrogate pairs (U+D800–U+DFFF)
+             ;; Handle surrogate pairs (U+D800-U+DFFF)
              (if (and (>= code #xD800) (<= code #xDBFF))
                  (parse-surrogate-pair code)
                  (code-char code))))
 
          (parse-surrogate-pair (high)
-           ;; Expect a low surrogate \uDC00–\uDFFF
-           (unless (and (< (+ pos 1) len)
-                        (char= (char string pos)      #\\)
-                        (char= (char string (+ pos 1)) #\u))
-             (%error "Expected low surrogate after high surrogate"))
-           (incf pos 2) ; consume \u
-           (let ((low 0))
-             (dotimes (i 4)
-               (when (>= pos len)
-                 (%error "Incomplete low surrogate escape"))
-               (let* ((c     (advance))
-                      (digit (digit-char-p c 16)))
-                 (unless digit
-                   (%error (format nil "Invalid hex digit '~C' in surrogate escape" c)))
-                 (setf low (+ (* low 16) digit))))
-             (unless (and (>= low #xDC00) (<= low #xDFFF))
-               (%error "Invalid low surrogate value"))
-             (code-char (+ #x10000 (* (- high #xD800) #x400) (- low #xDC00)))))
+           ;; Expect a low surrogate \uDC00-\uDFFF
+           (let ((next1 (advance))
+                 (next2 (advance)))
+             (unless (and (char= next1 #\\) (char= next2 #\u))
+               (%error "Expected low surrogate after high surrogate"))
+             (let ((low 0))
+               (dotimes (i 4)
+                 (let* ((c     (advance))
+                        (digit (digit-char-p c 16)))
+                   (unless digit
+                     (%error (format nil "Invalid hex digit '~C' in surrogate escape" c)))
+                   (setf low (+ (* low 16) digit))))
+               (unless (and (>= low #xDC00) (<= low #xDFFF))
+                 (%error "Invalid low surrogate value"))
+               (code-char (+ #x10000 (* (- high #xD800) #x400) (- low #xDC00))))))
 
          (parse-object ()
            (expect #\{)
@@ -295,36 +288,40 @@ Returns (HANDLER-RESULT HANDLER) after the parse completes."
          (parse-null  () (parse-literal '(#\n #\u #\l #\l)        :null))
 
          (parse-number ()
-           (let ((start pos))
+           (let ((num-chars (make-array 32 :element-type 'character
+                                           :adjustable t :fill-pointer 0)))
              ;; Optional leading minus
              (when (and (peek) (char= (peek) #\-))
-               (advance))
+               (vector-push-extend (advance) num-chars))
              ;; Integer part
              (cond
                ((and (peek) (char= (peek) #\0))
-                (advance))
+                (vector-push-extend (advance) num-chars))
                ((and (peek) (digit-char-p (peek)))
-                (loop while (and (peek) (digit-char-p (peek))) do (advance)))
+                (loop while (and (peek) (digit-char-p (peek)))
+                      do (vector-push-extend (advance) num-chars)))
                (t (%error "Invalid number")))
              ;; Optional fractional part
              (let ((is-float nil))
                (when (and (peek) (char= (peek) #\.))
                  (setf is-float t)
-                 (advance)
+                 (vector-push-extend (advance) num-chars)
                  (unless (and (peek) (digit-char-p (peek)))
                    (%error "Expected digit after decimal point"))
-                 (loop while (and (peek) (digit-char-p (peek))) do (advance)))
+                 (loop while (and (peek) (digit-char-p (peek)))
+                       do (vector-push-extend (advance) num-chars)))
                ;; Optional exponent
                (when (and (peek) (member (peek) '(#\e #\E)))
                  (setf is-float t)
-                 (advance)
+                 (vector-push-extend (advance) num-chars)
                  (when (and (peek) (member (peek) '(#\+ #\-)))
-                   (advance))
+                   (vector-push-extend (advance) num-chars))
                  (unless (and (peek) (digit-char-p (peek)))
                    (%error "Expected digit in exponent"))
-                 (loop while (and (peek) (digit-char-p (peek))) do (advance)))
+                 (loop while (and (peek) (digit-char-p (peek)))
+                       do (vector-push-extend (advance) num-chars)))
                (on-value handler
-                          (let ((num-str (subseq string start pos)))
+                          (let ((num-str (coerce num-chars 'string)))
                             (if is-float
                                 (let ((*read-default-float-format* 'double-float))
                                   (read-from-string num-str))
@@ -332,21 +329,42 @@ Returns (HANDLER-RESULT HANDLER) after the parse completes."
 
       (parse-value)
       (skip-whitespace)
-      (when (< pos len)
-        (%error (format nil "Unexpected trailing content '~C'" (char string pos))))
+      (when (peek)
+        (%error (format nil "Unexpected trailing content '~C'" (peek))))
       (handler-result handler))))
 
-;;; ─── Public API ──────────────────────────────────────────────────────────────
+;;; ─── Public API ────────────────────────────────────────────────────────────────────────────
 
-(defun parse (string)
-  "Parse a JSON string and return the corresponding Lisp value.
+(defun %input->stream (input)
+  "Coerce INPUT to a character stream for the JSON parser.
+INPUT may be a string, a character stream, or a binary stream
+(binary streams are wrapped with flexi-streams using UTF-8 encoding)."
+  (cond
+    ((stringp input)
+     (make-string-input-stream input))
+    ((and (streamp input)
+          (subtypep (stream-element-type input) 'character))
+     input)
+    ((streamp input)
+     ;; Binary / octet stream: wrap with flexi-streams for UTF-8 decoding.
+     (flexi-streams:make-flexi-stream input :external-format :utf-8))
+    (t
+     (error 'json-parse-error
+            :message (format nil "Cannot parse ~S: expected string or stream" input)
+            :position 0))))
+
+(defun parse (input)
+  "Parse JSON from INPUT and return the corresponding Lisp value.
+
+INPUT may be a string, a character stream, or a binary (octet) stream.
+Binary streams are decoded as UTF-8 via flexi-streams.
 
 Type mapping:
-  JSON null   → :null
-  JSON true   → t
-  JSON false  → nil
-  JSON string → string
-  JSON number → integer or double-float
-  JSON array  → vector
-  JSON object → hash-table with string keys (test: equal)"
-  (%parse string (make-instance 'json-tree-handler)))
+  JSON null   -> :null
+  JSON true   -> t
+  JSON false  -> nil
+  JSON string -> string
+  JSON number -> integer or double-float
+  JSON array  -> vector
+  JSON object -> hash-table with string keys (test: equal)"
+  (%parse (%input->stream input) (make-instance 'json-tree-handler)))
