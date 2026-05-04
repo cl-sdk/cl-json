@@ -1,4 +1,4 @@
-(defpackage #:cl-json.tests
+(defpackage #:cl-json.test
   (:use #:cl #:parachute)
   (:local-nicknames (#:json #:cl-json)
                     (#:flexi #:flexi-streams)))

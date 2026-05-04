@@ -1,4 +1,4 @@
-(defsystem #:cl-json.tests
+(defsystem #:cl-json.test
   :description "Tests for cl-json."
   :depends-on (#:cl-json #:parachute)
   :pathname "t"
