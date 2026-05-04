@@ -1,12 +1,9 @@
 (push *default-pathname-defaults* ql:*local-project-directories*)
 
-(asdf:oos 'asdf:load-op :cl-json.test :force t)
+(setf asdf/source-registry::*source-registry-file* #P"./.qlot/")
 
-(setf *debugger-hook*
-      (lambda (c h)
-        (declare (ignore c h))
-        (uiop:quit -1))
-      5am:*on-error* nil)
+(asdf:initialize-source-registry)
 
-(unless (5am:run-all-tests)
-  (uiop:quit -1))
+(ql:quickload :cl-json.test)
+
+(parachute:test :cl-json.test)

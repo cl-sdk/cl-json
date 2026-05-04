@@ -1,9 +1,9 @@
-(defpackage #:cl-json.tests
+(defpackage #:cl-json.test
   (:use #:cl #:parachute)
   (:local-nicknames (#:json #:cl-json)
                     (#:flexi #:flexi-streams)))
 
-(in-package #:cl-json.tests)
+(in-package #:cl-json.test)
 
 ;;; ── helpers ─────────────────────────────────────────────────────────────────
 

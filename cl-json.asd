@@ -8,5 +8,4 @@
                (:file "conditions")
                (:file "reader")
                (:file "writer")
-               (:file "derive"))
-  :in-order-to ((test-op (test-op #:cl-json.tests))))
+               (:file "derive")))
