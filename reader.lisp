@@ -57,15 +57,6 @@ or a double-float."))
 (defgeneric handler-result (handler)
   (:documentation "Return the result value after parsing has finished."))
 
-;;; Default no-op methods — subclasses need only specialise what they care about.
-(defmethod on-value      ((h json-handler) v) (declare (ignore v)))
-(defmethod begin-object  ((h json-handler)))
-(defmethod object-key    ((h json-handler) k) (declare (ignore k)))
-(defmethod end-object    ((h json-handler)))
-(defmethod begin-array   ((h json-handler)))
-(defmethod end-array     ((h json-handler)))
-(defmethod handler-result ((h json-handler)) nil)
-
 ;;; ─── Tree-building handler ───────────────────────────────────────────────────
 ;;;
 ;;; Reconstructs the standard Lisp tree from parse events:
