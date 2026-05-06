@@ -72,21 +72,22 @@ or a double-float."))
 ;;;                               pending key string (nil between entries)
 
 (defclass json-tree-handler (json-handler)
-  ((stack :initform (list (list :root nil)) :accessor %handler-stack))
+  ((stack :initform nil :accessor %handler-stack))
   (:documentation
    "A handler that builds the standard Lisp representation of JSON."))
 
 (defun %tree-accept (h v)
   "Insert value V into the innermost accumulator frame of handler H."
-  (let ((frame (first (%handler-stack h))))
-    (ecase (first frame)
-      (:root
-       (setf (second frame) v))
-      (:array
-       (push v (second frame)))
-      (:object
-       (setf (gethash (third frame) (second frame)) v)
-       (setf (third frame) nil)))))
+  (let ((frame (print (%handler-stack h))))
+    (cond
+      ((null frame)
+       (setf (%handler-stack h) (list v)))
+      ((eq :array (caar frame))
+       (push v (cadar frame)))
+      ((eq :object (caar frame))
+       (progn
+         (setf (gethash (caddar frame) (cadar frame)) v)
+         (setf (caddar frame) nil))))))
 
 (defmethod on-value ((h json-tree-handler) v)
   (%tree-accept h v))
@@ -110,7 +111,7 @@ or a double-float."))
     (%tree-accept h (coerce items 'vector))))
 
 (defmethod handler-result ((h json-tree-handler))
-  (second (first (%handler-stack h))))
+  (car (%handler-stack h)))
 
 ;;; ─── Core parser ────────────────────────────────────────────────────────────────────────────
 
