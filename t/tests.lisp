@@ -118,6 +118,18 @@
   (is string= "42"  (json:stringify 42))
   (is string= "-7"  (json:stringify -7)))
 
+(define-test "stringify floats"
+  ;; Floats with no non-zero fractional digits must keep at least one
+  ;; fractional digit so the output is valid JSON (spec: fraction = "." 1*DIGIT).
+  (is string= "1.0"   (json:stringify 1.0d0))
+  (is string= "0.0"   (json:stringify 0.0d0))
+  (is string= "100.0" (json:stringify 100.0d0))
+  (is string= "-1.0"  (json:stringify -1.0d0))
+  ;; Non-zero fractional digits are trimmed correctly
+  (is string= "1.5"   (json:stringify 1.5d0))
+  (is string= "1.5"   (json:stringify 1.50d0))
+  (is string= "1.23"  (json:stringify 1.23d0)))
+
 (define-test "stringify strings"
   (is string= "\"\""       (json:stringify ""))
   (is string= "\"hello\""  (json:stringify "hello"))
