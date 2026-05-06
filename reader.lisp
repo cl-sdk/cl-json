@@ -78,7 +78,7 @@ or a double-float."))
 
 (defun %tree-accept (h v)
   "Insert value V into the innermost accumulator frame of handler H."
-  (let ((frame (print (%handler-stack h))))
+  (let ((frame (%handler-stack h)))
     (cond
       ((null frame)
        (setf (%handler-stack h) (list v)))

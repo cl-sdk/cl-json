@@ -74,6 +74,26 @@
   (true (ht= (ht "x" "y" "n" :null)
              (json:parse "{\"x\":\"y\",\"n\":null}"))))
 
+(define-test "parse nested object"
+  ;; Single level of nesting: {"outer": {"inner": 42}}
+  (let* ((result (json:parse "{\"outer\":{\"inner\":42}}"))
+         (inner  (gethash "outer" result)))
+    (true (hash-table-p inner))
+    (is = 42 (gethash "inner" inner)))
+  ;; Multiple keys at both levels
+  (let* ((result (json:parse "{\"a\":{\"x\":1,\"y\":2},\"b\":\"top\"}"))
+         (nested (gethash "a" result)))
+    (true (hash-table-p nested))
+    (is = 1   (gethash "x" nested))
+    (is = 2   (gethash "y" nested))
+    (is string= "top" (gethash "b" result)))
+  ;; Object nested inside an array value
+  (let* ((result (json:parse "{\"items\":[{\"id\":1},{\"id\":2}]}"))
+         (items  (gethash "items" result)))
+    (is = 2 (length items))
+    (is = 1 (gethash "id" (aref items 0)))
+    (is = 2 (gethash "id" (aref items 1)))))
+
 (define-test "parse whitespace"
   (is =  1 (json:parse "  1  "))
   (is equalp #(1 2)
