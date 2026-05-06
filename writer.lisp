@@ -64,12 +64,14 @@ notation (with lowercase 'e') for very large or very small values."
     (cond
       ;; Zero and numbers in a compact fixed-point range.
       ((or (zerop d) (and (<= 1.0d-6 ad) (< ad 1.0d15)))
-       ;; ~F always produces a decimal point; trim trailing zeros.
+       ;; ~F always produces a decimal point; trim trailing zeros but keep
+       ;; at least one fractional digit so the output is valid JSON
+       ;; (the spec requires fraction = "." 1*DIGIT).
        (let* ((s    (format nil "~F" d))
               (dot  (position #\. s))
               (end  (if dot
                         (loop with e = (1- (length s))
-                              while (and (> e dot) (char= (char s e) #\0))
+                              while (and (> e (1+ dot)) (char= (char s e) #\0))
                               do (decf e)
                               finally (return (1+ e)))
                         (length s))))
