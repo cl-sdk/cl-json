@@ -1,4 +1,4 @@
-(in-package #:cl-json)
+(in-package #:io.github.cl-sdk.json)
 
 ;;; JSON → Lisp type mapping (for the default tree-building handler)
 ;;;

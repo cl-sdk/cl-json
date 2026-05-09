@@ -1,9 +1,9 @@
-(defpackage #:cl-json.test
+(defpackage #:io.github.cl-sdk.json.test
   (:use #:cl #:parachute)
-  (:local-nicknames (#:json #:cl-json)
+  (:local-nicknames (#:json #:io.github.cl-sdk.json)
                     (#:flexi #:flexi-streams)))
 
-(in-package #:cl-json.test)
+(in-package #:io.github.cl-sdk.json.test)
 
 ;;; ── helpers ─────────────────────────────────────────────────────────────────
 

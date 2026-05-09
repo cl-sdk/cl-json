@@ -1,4 +1,4 @@
-(defpackage #:cl-json
+(defpackage #:io.github.cl-sdk.json
   (:nicknames #:json)
   (:use #:cl)
   (:export

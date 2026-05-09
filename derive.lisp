@@ -1,4 +1,4 @@
-(in-package #:cl-json)
+(in-package #:io.github.cl-sdk.json)
 
 ;;; derive-json — automatically derive JSON encoding and decoding for a CLOS class.
 ;;;

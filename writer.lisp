@@ -1,4 +1,4 @@
-(in-package #:cl-json)
+(in-package #:io.github.cl-sdk.json)
 
 ;;; Lisp → JSON type mapping
 ;;;

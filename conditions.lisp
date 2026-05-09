@@ -1,4 +1,4 @@
-(in-package #:cl-json)
+(in-package #:io.github.cl-sdk.json)
 
 (define-condition json-error (error) ())
 
