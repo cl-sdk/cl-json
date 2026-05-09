@@ -1,15 +1,15 @@
-# cl-json
+# io.github.cl-sdk.json
 
 A JSON reader and writer for Common Lisp. It also provides automatic JSON
 encoding/decoding derivations for CLOS classes via `cl-sdk/meta-definitions`.
 
 ## Installation
 
-Add `cl-json` to your system's `:depends-on` list. The system requires
+Add `io.github.cl-sdk.json` to your system's `:depends-on` list. The system requires
 `meta-definitions`, `closer-mop`, and `flexi-streams`.
 
 ```lisp
-(ql:quickload :cl-json)
+(ql:quickload :io.github.cl-sdk.json)
 ```
 
 The package is also accessible through its nickname `json`.

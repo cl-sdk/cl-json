@@ -1,6 +1,6 @@
-(defsystem #:cl-json
+(defsystem #:io.github.cl-sdk.json
   :description "A JSON reader and writer for Common Lisp."
-  :long-description "cl-json provides a JSON parser (parse) and serializer
+  :long-description "io.github.cl-sdk.json provides a JSON parser (parse) and serializer
 (stringify) for Common Lisp, with automatic encoding/decoding derivations for
 CLOS classes via the derive-json macro and the cl-sdk/meta-definitions library.
 Binary streams are transparently handled with UTF-8 encoding via flexi-streams."
@@ -12,7 +12,7 @@ Binary streams are transparently handled with UTF-8 encoding via flexi-streams."
   :source-control (:git "https://github.com/cl-sdk/cl-json.git")
   :bug-tracker "https://github.com/cl-sdk/cl-json/issues"
   :depends-on (#:meta-definitions #:closer-mop #:flexi-streams)
-  :in-order-to ((test-op (test-op #:cl-json.test)))
+  :in-order-to ((test-op (test-op #:io.github.cl-sdk.json.test)))
   :serial t
   :components ((:file "package")
                (:file "conditions")

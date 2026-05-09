@@ -4,6 +4,6 @@
 
 (asdf:initialize-source-registry)
 
-(ql:quickload :cl-json.test)
+(ql:quickload :io.github.cl-sdk.json.test)
 
-(parachute:test :cl-json.test)
+(parachute:test :io.github.cl-sdk.json.test)
